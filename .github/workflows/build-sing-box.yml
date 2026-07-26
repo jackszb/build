@@ -34,13 +34,16 @@ jobs:
       - name: Show Go version
         run: go version
 
-      - name: Assemble build tags (default + with_grpc)
+      - name: Assemble build tags (default + with_grpc + with_purego)
         id: tags
         run: |
           set -e
           DEFAULT_TAGS=$(cat release/DEFAULT_BUILD_TAGS)
           echo "官方默认标签: ${DEFAULT_TAGS}"
-          FULL_TAGS="${DEFAULT_TAGS},with_grpc"
+          # 默认标签中包含 with_naive_outbound，该功能在 Linux amd64 下
+          # 需要选择 purego 或 CGO 实现之一。这里不使用 CGO 工具链，
+          # 因此显式加上 with_purego 标记（对应官方发布版本的构建方式）。
+          FULL_TAGS="${DEFAULT_TAGS},with_grpc,with_purego"
           echo "最终使用标签: ${FULL_TAGS}"
           echo "tags=${FULL_TAGS}" >> "$GITHUB_OUTPUT"
 
@@ -60,6 +63,26 @@ jobs:
             -ldflags "${{ steps.ldflags.outputs.ldflags }}" \
             -o dist/sing-box \
             ./cmd/sing-box
+
+      - name: Download libcronet.so (required at runtime for with_purego naive outbound)
+        id: cronet
+        continue-on-error: true
+        run: |
+          API_URL="https://api.github.com/repos/sagernet/cronet-go/releases/latest"
+          echo "查询: ${API_URL}"
+          ASSET_URL=$(curl -sL "$API_URL" \
+            | grep "browser_download_url" \
+            | grep -i "linux_amd64" \
+            | grep -i "purego\|\.so" \
+            | head -n1 \
+            | cut -d '"' -f4)
+          if [ -z "$ASSET_URL" ]; then
+            echo "::warning::未能自动匹配到 linux_amd64 的 libcronet.so 资源，请到 https://github.com/sagernet/cronet-go/releases 手动下载并放到二进制同目录后再使用 naive 出站功能。构建本身不受影响。"
+            exit 0
+          fi
+          echo "下载: ${ASSET_URL}"
+          curl -sL -o dist/libcronet.so "$ASSET_URL"
+          ls -la dist/
 
       - name: Verify binary
         run: |
