@@ -1,0 +1,74 @@
+name: Build sing-box (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '要构建的 sing-box 版本 tag（例如 v1.11.0）'
+        required: true
+        type: string
+
+env:
+  GOOS: linux
+  GOARCH: amd64
+  CGO_ENABLED: 0
+
+jobs:
+  build:
+    name: Build sing-box ${{ github.event.inputs.version }} (linux/amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sing-box source
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: ${{ github.event.inputs.version }}
+          fetch-depth: 1
+
+      - name: Setup Go (latest stable)
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+
+      - name: Show Go version
+        run: go version
+
+      - name: Assemble build tags (default + with_grpc)
+        id: tags
+        run: |
+          set -e
+          DEFAULT_TAGS=$(cat release/DEFAULT_BUILD_TAGS)
+          echo "官方默认标签: ${DEFAULT_TAGS}"
+          FULL_TAGS="${DEFAULT_TAGS},with_grpc"
+          echo "最终使用标签: ${FULL_TAGS}"
+          echo "tags=${FULL_TAGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Load linker flags
+        id: ldflags
+        run: |
+          set -e
+          LDFLAGS=$(cat release/LDFLAGS)
+          echo "链接器标志: ${LDFLAGS}"
+          echo "ldflags=${LDFLAGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Build sing-box binary
+        run: |
+          mkdir -p dist
+          go build \
+            -tags "${{ steps.tags.outputs.tags }}" \
+            -ldflags "${{ steps.ldflags.outputs.ldflags }}" \
+            -o dist/sing-box \
+            ./cmd/sing-box
+
+      - name: Verify binary
+        run: |
+          file dist/sing-box
+          ./dist/sing-box version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing-box-${{ github.event.inputs.version }}-linux-amd64
+          path: dist/sing-box
+          if-no-files-found: error
