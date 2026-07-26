@@ -75,12 +75,11 @@ jobs:
           echo "查询: ${API_URL}"
           ASSET_URL=$(curl -sL "$API_URL" \
             | grep "browser_download_url" \
-            | grep -i "linux_amd64" \
-            | grep -i "purego\|\.so" \
+            | grep -i "libcronet-linux-amd64.so" \
             | head -n1 \
             | cut -d '"' -f4)
           if [ -z "$ASSET_URL" ]; then
-            echo "::warning::未能自动匹配到 linux_amd64 的 libcronet.so 资源，请到 https://github.com/sagernet/cronet-go/releases 手动下载并放到二进制同目录后再使用 naive 出站功能。构建本身不受影响。"
+            echo "::warning::未能自动匹配到 linux-amd64 的 libcronet.so 资源，请到 https://github.com/sagernet/cronet-go/releases 手动下载并放到二进制同目录后再使用 naive 出站功能。构建本身不受影响。"
             exit 0
           fi
           echo "下载: ${ASSET_URL}"
