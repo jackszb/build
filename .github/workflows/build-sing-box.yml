@@ -13,6 +13,9 @@ env:
   GOARCH: amd64
   CGO_ENABLED: 0
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build sing-box ${{ github.event.inputs.version }} (linux/amd64)
@@ -95,3 +98,25 @@ jobs:
           name: sing-box-${{ github.event.inputs.version }}-linux-amd64
           path: dist/sing-box
           if-no-files-found: error
+
+      - name: Package as zip
+        id: package
+        run: |
+          set -e
+          cd dist
+          ZIP_NAME="sing-box-${{ github.event.inputs.version }}-linux-amd64.zip"
+          zip -j "${ZIP_NAME}" sing-box $( [ -f libcronet.so ] && echo libcronet.so )
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          ls -la
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: sing-box ${{ github.event.inputs.version }} (linux/amd64)
+          body: |
+            自动构建产物：sing-box ${{ github.event.inputs.version }}
+            平台：linux/amd64
+            构建标记：${{ steps.tags.outputs.tags }}
+          files: dist/${{ steps.package.outputs.zip_name }}
+          make_latest: true
